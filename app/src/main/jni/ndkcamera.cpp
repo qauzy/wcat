@@ -86,6 +86,7 @@ static void onImageAvailable(void* context, AImageReader* reader)
     }
     else
     {
+        // NV21图像格式属于 YUV颜色空间中的YUV420SP格式，每四个Y分量共用一组U分量和V分量，Y连续排序，U与V交叉排序
         // construct nv21
         unsigned char* nv21 = new unsigned char[width * height + width * height / 2];
         {
@@ -118,7 +119,7 @@ static void onImageAvailable(void* context, AImageReader* reader)
                 }
             }
         }
-
+        //调用虚函数 on_image_render
         ((NdkCamera*)context)->on_image((unsigned char*)nv21, (int)width, (int)height);
 
         delete[] nv21;
@@ -169,8 +170,10 @@ NdkCamera::NdkCamera()
 
     camera_manager = 0;
     camera_device = 0;
+    //
     image_reader = 0;
-    image_reader_surface = 0;
+
+    image_reader_surface = 0;  //这个和image_reader关联
     image_reader_target = 0;
     capture_request = 0;
     capture_session_output_container = 0;
@@ -184,12 +187,16 @@ NdkCamera::NdkCamera()
 
         AImageReader_ImageListener listener;
         listener.context = this;
+        //图像准备好时回调
         listener.onImageAvailable = onImageAvailable;
 
+        //监听image_reader
         AImageReader_setImageListener(image_reader, &listener);
 
+        //image_reader_surface在摄像头被打开时和摄像头关联 --> 现在构建这个对象image_reader_surface
         AImageReader_getWindow(image_reader, &image_reader_surface);
 
+        //防止内存被释放
         ANativeWindow_acquire(image_reader_surface);
     }
 }
@@ -223,12 +230,16 @@ int NdkCamera::open(int _camera_facing)
     std::string camera_id;
     {
         ACameraIdList* camera_id_list = 0;
+
+        //获取摄像头列表
         ACameraManager_getCameraIdList(camera_manager, &camera_id_list);
 
         for (int i = 0; i < camera_id_list->numCameras; ++i)
         {
             const char* id = camera_id_list->cameraIds[i];
             ACameraMetadata* camera_metadata = 0;
+
+            //获取相机的详细信息
             ACameraManager_getCameraCharacteristics(camera_manager, id, &camera_metadata);
 
             // query faceing
@@ -284,11 +295,15 @@ int NdkCamera::open(int _camera_facing)
         ACameraManager_openCamera(camera_manager, camera_id.c_str(), &camera_device_state_callbacks, &camera_device);
     }
 
-    // capture request
+    // capture request 构建capture请求对象
     {
+        //在获取设备（指针）后，需要通过不断的发送请求（ACaptureRequest），以得到图像信息
         ACameraDevice_createCaptureRequest(camera_device, TEMPLATE_PREVIEW, &capture_request);
 
+        //构建一个和surface关联的reader
         ACameraOutputTarget_create(image_reader_surface, &image_reader_target);
+
+        //
         ACaptureRequest_addTarget(capture_request, image_reader_target);
     }
 
@@ -300,6 +315,7 @@ int NdkCamera::open(int _camera_facing)
         camera_capture_session_state_callbacks.onReady = onSessionReady;
         camera_capture_session_state_callbacks.onClosed = onSessionClosed;
 
+        //ACaptureRequest所返回的响应数据，由ACaptureSessionOutputContainer中的ACaptureSessionOutput接收
         ACaptureSessionOutputContainer_create(&capture_session_output_container);
 
         ACaptureSessionOutput_create(image_reader_surface, &capture_session_output);
@@ -318,6 +334,9 @@ int NdkCamera::open(int _camera_facing)
         camera_capture_session_capture_callbacks.onCaptureSequenceAborted = onCaptureSequenceAborted;
         camera_capture_session_capture_callbacks.onCaptureBufferLost = 0;
 
+        //不断的发送请求，是如何完成的？
+        //
+        //只需要调用ACameraCaptureSession_setRepeatingRequest方法即可。
         ACameraCaptureSession_setRepeatingRequest(capture_session, &camera_capture_session_capture_callbacks, 1, &capture_request, nullptr);
     }
 
@@ -330,6 +349,7 @@ void NdkCamera::close()
 
     if (capture_session)
     {
+        //而当需要停止发送请求时，调用ACameraCaptureSession_stopRepeating方法即可。
         ACameraCaptureSession_stopRepeating(capture_session);
         ACameraCaptureSession_close(capture_session);
         capture_session = 0;
@@ -416,6 +436,7 @@ void NdkCamera::on_image(const unsigned char* nv21, int nv21_width, int nv21_hei
     cv::Mat rgb(h, w, CV_8UC3);
     ncnn::yuv420sp2rgb(nv21_rotated.data, w, h, rgb.data);
 
+    //会调用NdkCameraWindow的on_image
     on_image(rgb);
 }
 
@@ -464,6 +485,8 @@ void NdkCameraWindow::set_window(ANativeWindow* _win)
     }
 
     win = _win;
+
+    //阻止内存被回收
     ANativeWindow_acquire(win);
 }
 
@@ -499,7 +522,7 @@ void NdkCameraWindow::on_image(const unsigned char* nv21, int nv21_width, int nv
                 float acceleration_x = e[num_event - 1].acceleration.x;
                 float acceleration_y = e[num_event - 1].acceleration.y;
                 float acceleration_z = e[num_event - 1].acceleration.z;
-//                 __android_log_print(ANDROID_LOG_WARN, "NdkCameraWindow", "x = %f, y = %f, z = %f", x, y, z);
+                 __android_log_print(ANDROID_LOG_WARN, "NdkCameraWindow", "x = %f, y = %f, z = %f", acceleration_x, acceleration_y, acceleration_z);
 
                 if (acceleration_y > 7)
                 {
@@ -719,14 +742,16 @@ void NdkCameraWindow::on_image(const unsigned char* nv21, int nv21_width, int nv
     cv::Mat rgb(roi_h, roi_w, CV_8UC3);
     ncnn::yuv420sp2rgb(nv21_croprotated.data, roi_w, roi_h, rgb.data);
 
+    //会调用MyNdkCamera的on_image_render
     on_image_render(rgb);
 
     // rotate to native window orientation
     cv::Mat rgb_render(render_h, render_w, CV_8UC3);
     ncnn::kanna_rotate_c3(rgb.data, roi_w, roi_h, rgb_render.data, render_w, render_h, render_rotate_type);
-
+    //设置窗口buffer的格式和大小
     ANativeWindow_setBuffersGeometry(win, render_w, render_h, AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM);
 
+    //锁定窗口的写surface并获取下一个可写的显示缓冲区
     ANativeWindow_Buffer buf;
     ANativeWindow_lock(win, &buf, NULL);
 
@@ -767,5 +792,6 @@ void NdkCameraWindow::on_image(const unsigned char* nv21, int nv21_width, int nv
         }
     }
 
+    //释放窗口的写surface，并将新的缓冲buffer发送给显示模块
     ANativeWindow_unlockAndPost(win);
 }

@@ -7,7 +7,10 @@ android {
     defaultConfig {
         applicationId "com.tencent.scrfdncnn"
         archivesBaseName = "$applicationId"
-
+        ndk {
+            moduleName "ncnn"
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
         minSdkVersion 24
     }
 
@@ -21,4 +24,5 @@ android {
     dependencies {
         implementation 'com.android.support:support-v4:24.0.0'
     }
+    ndkVersion '25.1.8937393'
 }

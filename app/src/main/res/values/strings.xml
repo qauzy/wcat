@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">scrfdncnn</string>
+    <string name="app_name">机灵猫</string>
     <string-array name="model_array">
         <item>500m</item>
         <item>500m_kps</item>

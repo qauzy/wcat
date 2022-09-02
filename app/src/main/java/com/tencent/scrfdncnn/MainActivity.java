@@ -16,6 +16,7 @@ package com.tencent.scrfdncnn;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.PixelFormat;
 import android.os.Bundle;
@@ -32,6 +33,10 @@ import android.widget.Spinner;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 
+//import com.pedro.rtsp.utils.ConnectCheckerRtsp;
+//import com.pedro.rtspserver.RtspServerCamera1;
+//import com.pedro.rtspserver.RtspServerCamera2;
+
 public class MainActivity extends Activity implements SurfaceHolder.Callback
 {
     public static final int REQUEST_CAMERA = 100;
@@ -46,6 +51,10 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback
 
     private SurfaceView cameraView;
 
+    private SpeechUtils spk;
+
+//    private RtspServerCamera1 mRtspServerCamera;
+
     /** Called when the activity is first created. */
     @Override
     public void onCreate(Bundle savedInstanceState)
@@ -59,7 +68,17 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback
 
         cameraView.getHolder().setFormat(PixelFormat.RGBA_8888);
         cameraView.getHolder().addCallback(this);
+        Context ctx =  getApplicationContext();
+        spk = new SpeechUtils(ctx);
 
+
+//        mRtspServerCamera = new RtspServerCamera1(cameraView, this, 4321);
+//        if( mRtspServerCamera.prepareAudio() && mRtspServerCamera.prepareVideo()){
+//            mRtspServerCamera.startStream();
+//
+//        }
+
+        scrfdncnn.initSpk(this);
         Button buttonSwitchCamera = (Button) findViewById(R.id.buttonSwitchCamera);
         buttonSwitchCamera.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -126,6 +145,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height)
     {
+        Log.i("MainActivity", "surfaceChanged");
         scrfdncnn.setOutputWindow(holder.getSurface());
     }
 
@@ -148,15 +168,20 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback
         {
             ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.CAMERA}, REQUEST_CAMERA);
         }
-
+        spk.speak("我机灵猫回来啦");
         scrfdncnn.openCamera(facing);
+    }
+
+    public void faceCallBack(int face)
+    {
+        spk.speak("现在看到有"+face+"个人");
     }
 
     @Override
     public void onPause()
     {
         super.onPause();
-
+        spk.speak("不要忘了我机灵猫哦");
         scrfdncnn.closeCamera();
     }
 }

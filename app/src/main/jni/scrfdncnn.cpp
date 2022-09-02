@@ -36,6 +36,10 @@
 #if __ARM_NEON
 #include <arm_neon.h>
 #endif // __ARM_NEON
+JavaVM *gJavaVM;//全局JavaVM 变量
+jobject gJavaObj;//全局Jobject变量
+JNIEnv * gEnv;	//全局的JNIEnv变量
+jmethodID nativeCallback;//全局的方法ID
 
 static int draw_unsupported(cv::Mat& rgb)
 {
@@ -129,6 +133,11 @@ void MyNdkCamera::on_image_render(cv::Mat& rgb) const
         {
             std::vector<FaceObject> faceobjects;
             g_scrfd->detect(rgb, faceobjects);
+            JNIEnv *env;
+            //从全局的JavaVM中获取到环境变量
+            gJavaVM->AttachCurrentThread(&env,NULL);
+            env->CallVoidMethod(gJavaObj,nativeCallback,(int)faceobjects.size());
+            gJavaVM->DetachCurrentThread();
 
             g_scrfd->draw(rgb, faceobjects);
         }
@@ -145,6 +154,7 @@ static MyNdkCamera* g_camera = 0;
 
 extern "C" {
 
+//Java调用System.loadLibrary()加载一个库的时候，会首先在库中搜索JNI_OnLoad()函数，如果该函数存在，则执行它；
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
 {
     __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "JNI_OnLoad");
@@ -154,6 +164,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
     return JNI_VERSION_1_4;
 }
 
+//根据JNI文档的描述，当GC回收了加载这个库的ClassLoader时，该函数被调用
 JNIEXPORT void JNI_OnUnload(JavaVM* vm, void* reserved)
 {
     __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "JNI_OnUnload");
@@ -176,6 +187,7 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_scrfdncnn_SCRFDNcnn_loadModel(JNIEnv
     {
         return JNI_FALSE;
     }
+
 
     AAssetManager* mgr = AAssetManager_fromJava(env, assetManager);
 
@@ -213,6 +225,11 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_scrfdncnn_SCRFDNcnn_loadModel(JNIEnv
             g_scrfd->load(mgr, modeltype, use_gpu);
         }
     }
+    gJavaObj = env->NewGlobalRef(thiz);//创建全局引用
+    jclass clazz = env->GetObjectClass(thiz);
+    nativeCallback = env->GetMethodID(clazz,"onNativeCallBack","(I)V");
+    //操作方式二，调用JNI函数保存JavaVM
+    env->GetJavaVM(&gJavaVM);
 
     return JNI_TRUE;
 }

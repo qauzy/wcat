@@ -25,7 +25,7 @@ static inline float intersection_area(const FaceObject& a, const FaceObject& b)
     cv::Rect_<float> inter = a.rect & b.rect;
     return inter.area();
 }
-
+//降序快速排序
 static void qsort_descent_inplace(std::vector<FaceObject>& faceobjects, int left, int right)
 {
     int i = left;
@@ -62,7 +62,7 @@ static void qsort_descent_inplace(std::vector<FaceObject>& faceobjects, int left
         }
     }
 }
-
+//快速排序降序
 static void qsort_descent_inplace(std::vector<FaceObject>& faceobjects)
 {
     if (faceobjects.empty())

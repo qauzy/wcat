@@ -19,10 +19,23 @@ import android.view.Surface;
 
 public class SCRFDNcnn
 {
+    private MainActivity mAct;
+    private int cnt;
+    public void initSpk(MainActivity act) {
+        mAct = act;
+    }
     public native boolean loadModel(AssetManager mgr, int modelid, int cpugpu);
     public native boolean openCamera(int facing);
     public native boolean closeCamera();
     public native boolean setOutputWindow(Surface surface);
+    public void onNativeCallBack(int face) {
+        if(cnt != face){
+            cnt = face;
+            mAct.faceCallBack(face);
+        }
+
+    }
+
 
     static {
         System.loadLibrary("scrfdncnn");
